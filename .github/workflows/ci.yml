@@ -1,0 +1,79 @@
+name: Export SWF → FLA
+
+on:
+  workflow_dispatch:
+    inputs:
+      swf_url:
+        description: 'URL of the SWF to decompile'
+        required: true
+      fla_version:
+        description: 'FLA format version (f5, mx, mx2004, f8, cs3, cs4, cs5, cs5.5, cs6, cc)'
+        required: true
+        default: 'cs6'
+      jpexs_url:
+        description: 'URL of the JPEXS nightly build zip file (optional)'
+        required: false
+
+permissions:
+  contents: read
+  
+jobs:
+  export-swf:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Validate FLA version input
+      run: |
+        case "${{ github.event.inputs.fla_version }}" in
+          f5|mx|mx2004|f8|cs3|cs4|cs5|cs5.5|cs6|cc) ;;
+          *) echo "Invalid fla_version: ${{ github.event.inputs.fla_version }}" && exit 1 ;;
+        esac
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '8'
+
+    - name: Determine JPEXS nightly build URL
+      id: get_jpexs_url
+      run: |
+        if [ -z "${{ github.event.inputs.jpexs_url }}" ]; then
+          echo "Fetching latest nightly build URL..."
+          latest_release=$(curl -s https://api.github.com/repos/jindrapetrik/jpexs-decompiler/releases | jq -r '.[] | select(.prerelease == true) | .assets[] | select(.name | endswith(".zip")) | .browser_download_url' | head -n 1)
+          echo "Latest nightly build URL: $latest_release"
+          echo "jpexs_url=$latest_release" >> $GITHUB_OUTPUT
+        else
+          echo "Using provided JPEXS URL: ${{ github.event.inputs.jpexs_url }}"
+          echo "jpexs_url=${{ github.event.inputs.jpexs_url }}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Download JPEXS nightly build
+      run: |
+        curl -L -o jpexs-nightly.zip "${{ steps.get_jpexs_url.outputs.jpexs_url }}"
+
+    - name: Extract JPEXS ZIP
+      run: |
+        unzip jpexs-nightly.zip -d ffdec
+
+    - name: Download SWF file
+      run: |
+        curl -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36 Edg/90.0.818.51" -o source.swf "${{ github.event.inputs.swf_url }}"
+
+    - name: Export SWF to FLA
+      run: |
+        mkdir -p fla-output/src
+        java -Djava.net.preferIPv4Stack=true -Djna.nosys=true -Djava.util.Arrays.useLegacyMergeSort=true -Xmx4g -Xss32m -jar ffdec/ffdec.jar \
+          -cli \
+          -onerror retry 5 \
+          -timeout 600 \
+          -exportTimeout 1200 \
+          -exportFileTimeout 600 \
+          -format fla:${{ github.event.inputs.fla_version }} \
+          -export fla fla-output/src source.swf
+
+    - name: Upload FLA artifact
+      uses: actions/upload-artifact@main
+      with:
+        name: exported-fla
+        path: fla-output
