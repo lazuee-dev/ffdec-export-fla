@@ -56,9 +56,20 @@ jobs:
       run: |
         unzip jpexs-nightly.zip -d ffdec
 
-    - name: Download SWF file
+    - name: Download SWF file and Set Artifact Name
       run: |
-        curl -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36 Edg/90.0.818.51" -o source.swf "${{ github.event.inputs.swf_url }}"
+        SWF_URL="${{ github.event.inputs.swf_url }}"
+        
+        # Extract filename (e.g., town-terminatemple-21oct25.swf)
+        FULL_FILENAME=$(basename "$SWF_URL")
+        
+        # Remove extension (e.g., town-terminatemple-21oct25)
+        NAME_NO_EXT="${FULL_FILENAME%.*}"
+        
+        echo "Setting artifact name to: $NAME_NO_EXT"
+        echo "ARTIFACT_NAME=$NAME_NO_EXT" >> $GITHUB_ENV
+        
+        curl -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36 Edg/90.0.818.51" -o source.swf "$SWF_URL"
 
     - name: Export SWF to FLA
       run: |
@@ -75,5 +86,5 @@ jobs:
     - name: Upload FLA artifact
       uses: actions/upload-artifact@main
       with:
-        name: exported-fla
+        name: ${{ env.ARTIFACT_NAME }}
         path: fla-output
