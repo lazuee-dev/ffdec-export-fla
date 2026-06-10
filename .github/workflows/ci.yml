@@ -60,8 +60,11 @@ jobs:
       run: |
         SWF_URL="${{ github.event.inputs.swf_url }}"
         
+        # Remove query parameters from URL to ensure valid artifact name
+        CLEAN_URL="${SWF_URL%%\?*}"
+        
         # Extract filename (e.g., town-terminatemple-21oct25.swf)
-        FULL_FILENAME=$(basename "$SWF_URL")
+        FULL_FILENAME=$(basename "$CLEAN_URL")
         
         # Remove extension (e.g., town-terminatemple-21oct25)
         NAME_NO_EXT="${FULL_FILENAME%.*}"
@@ -81,6 +84,7 @@ jobs:
           -exportTimeout 1200 \
           -exportFileTimeout 600 \
           -format fla:${{ github.event.inputs.fla_version }} \
+          -config exportFlaAs3DisableScriptLayer=1 \
           -export fla fla-output/src source.swf
 
     - name: Upload FLA artifact
